@@ -8,7 +8,7 @@ load_dotenv()
 # INTENTIONAL VULNERABILITY #3: Hardcoded secret key
 # DO NOT use hardcoded secrets in production!
 # Correct approach: Read from environment variable or secret manager
-SECRET_KEY = os.getenv('SECRET_KEY')
+SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = SECRET_KEY
