@@ -1,0 +1,32 @@
+version: '3.9'
+
+services:
+  memeforge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: memeforge-app
+    ports:
+      - "5000:5000"
+    environment:
+      FLASK_ENV: development
+      FLASK_APP: app.py
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+      HOST: 0.0.0.0
+      PORT: 5000
+    volumes:
+      # Mount source code for development (hot reload)
+      - .:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - memeforge-network
+
+networks:
+  memeforge-network:
+    driver: bridge
