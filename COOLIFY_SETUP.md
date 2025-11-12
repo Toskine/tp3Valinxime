@@ -1,6 +1,171 @@
 # Configuration DNS et Coolify pour le TP03
 
-## 📋 Configuration DNS
+## �️ Installation de Coolify
+
+### Prérequis serveur
+
+- **OS** : Linux (Ubuntu 20.04+, Debian 10+, etc.) ou Docker Desktop
+- **CPU** : Au moins 1 core (2+ recommandé)
+- **RAM** : Au moins 1GB (2GB+ recommandé)
+- **Disque** : 10GB minimum
+- **Ports** : 80, 443 ouverts (pour HTTP/HTTPS)
+- **Docker** : Installé et en cours d'exécution
+
+### Option 1 : Installation sur un serveur Linux (recommandé pour production)
+
+#### Étape 1 : Installer Docker
+
+```bash
+# Sur Ubuntu/Debian
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+# Ajouter l'utilisateur actuel au groupe docker
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+#### Étape 2 : Installer Coolify
+
+```bash
+# Télécharger et exécuter le script d'installation
+curl -fsSL https://get.cooli.dev | bash
+
+# Ou en une seule commande
+docker run -it --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /root:/root \
+  -v /opt/coolify:/opt/coolify \
+  ghcr.io/coollabsio/coolify:latest \
+  /bin/sh -c "curl -fsSL https://get.cooli.dev | bash"
+```
+
+**Le script va** :
+- Créer les volumes Docker
+- Configurer Coolify
+- Démarrer les services
+
+#### Étape 3 : Accéder à Coolify
+
+Après l'installation (2-3 minutes) :
+
+```
+https://your-server-ip:3000
+```
+
+**Identifiants par défaut** :
+- Email : `admin@coolify.io`
+- Password : `password` (à changer immédiatement !)
+
+### Option 2 : Installation Docker Desktop (pour développement local)
+
+Si vous avez Docker Desktop sur votre machine :
+
+```bash
+# Créer les répertoires
+mkdir -p $HOME/coolify/data
+mkdir -p $HOME/coolify/logs
+
+# Lancer Coolify avec docker run
+docker run -d \
+  --name coolify \
+  -p 3000:3000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $HOME/coolify/data:/data \
+  -v $HOME/coolify/logs:/logs \
+  -e COOLIFY_DATABASE_URL="postgresql://coolify:coolify@postgres:5432/coolify" \
+  ghcr.io/coollabsio/coolify:latest
+```
+
+Ou avec Docker Compose :
+
+```bash
+# Créer docker-compose.yml pour Coolify
+cat > docker-compose-coolify.yml << 'EOF'
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: coolify
+      POSTGRES_USER: coolify
+      POSTGRES_PASSWORD: coolify
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  coolify:
+    image: ghcr.io/coollabsio/coolify:latest
+    ports:
+      - "3000:3000"
+    environment:
+      COOLIFY_DATABASE_URL: postgresql://coolify:coolify@postgres:5432/coolify
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - coolify_data:/data
+      - coolify_logs:/logs
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  coolify_data:
+  coolify_logs:
+EOF
+
+docker-compose -f docker-compose-coolify.yml up -d
+```
+
+Accès : `http://localhost:3000`
+
+---
+
+## ⚙️ Configuration initiale de Coolify
+
+### Étape 1 : Connexion et sécurité
+
+1. Accédez à `https://your-coolify-instance:3000`
+2. Connectez-vous avec les identifiants par défaut
+3. **Allez à Settings** → **Change Password**
+4. Changez le mot de passe immédiatement ⚠️
+
+### Étape 2 : Configurer le serveur Docker
+
+1. **Settings** → **Servers**
+2. Vérifier que votre serveur Docker est connecté (devrait être automatique)
+3. Si pas de serveur, cliquer **Add Server** et configurer
+
+### Étape 3 : Ajouter le registre Docker (GitHub Container Registry)
+
+1. **Settings** → **Registries**
+2. **Add Registry** :
+   - **Type** : Docker Registry
+   - **Name** : `GitHub Container Registry`
+   - **URL** : `ghcr.io`
+   - **Username** : Votre username GitHub
+   - **Password** : Token GitHub (Classic)
+   - **Is Public** : Non
+
+Pour créer un token GitHub :
+- GitHub → **Settings** → **Developer settings** → **Personal access tokens** → **Tokens (classic)**
+- **Generate new token**
+- Permissions : `write:packages, read:packages, delete:packages`
+- Copier le token et le coller dans Coolify
+
+### Étape 4 : Configurer Let's Encrypt (SSL/TLS)
+
+1. **Settings** → **Let's Encrypt**
+2. **Email** : Votre email
+3. **Enable** : Cocher "Use Let's Encrypt"
+4. Coolify générera automatiquement les certificats SSL
+
+---
+
+## �📋 Configuration DNS
+
+Pour déployer votre application à `site.tpdevopslabXX.store`, vous devez configurer le DNS comme suit :
 
 Pour déployer votre application à `site.tpdevopslabXX.store`, vous devez configurer le DNS comme suit :
 
@@ -36,57 +201,102 @@ CNAME   | *.tpdevopslab    | coolify.example.com
 
 ### Étape 1 : Créer une application dans Coolify
 
-1. Connectez-vous à votre instance Coolify
-2. **Projects** → **Créer un nouveau projet** → `TP03-MemeForge`
-3. **Créer une application** :
-   - **Name** : `memeforge`
-   - **Source** : GitHub
-   - **Repository** : `Toskine/tp3Valinxime`
-   - **Branch** : `main`
-   - **Dockerfile** : `./Dockerfile`
-   - **Port** : `5000`
-   - **Environment Variables** :
-     ```
-     SECRET_KEY=your-secure-key-here
-     FLASK_ENV=production
-     FLASK_DEBUG=False
-     ```
+#### 1.1 Créer un projet
+
+1. Dans Coolify, cliquer sur **Projects**
+2. **New Project** → Remplir les informations :
+   - **Name** : `TP03-MemeForge`
+   - **Description** : `Meme Generator for TP03 DevOps`
+3. **Create**
+
+#### 1.2 Ajouter une application
+
+1. Dans le projet, cliquer **New Application**
+2. Remplir les informations :
+
+**Basic Settings :**
+- **Name** : `memeforge`
+- **Repository** : `https://github.com/Toskine/tp3Valinxime.git`
+- **Branch** : `main`
+- **Build Method** : `Docker`
+- **Dockerfile Path** : `./Dockerfile`
+
+**Port Configuration :**
+- **Port mapping** : `5000:5000` (exposer le port 5000)
+- **Expose as** : `http` (ou https si certificat SSL)
+
+**Environment Variables** :
+- Cliquer sur **Environment Variables**
+- Ajouter les variables :
+
+```
+SECRET_KEY=your-very-secure-secret-key-here-min-32-chars
+FLASK_ENV=production
+FLASK_DEBUG=False
+HOST=0.0.0.0
+PORT=5000
+```
+
+**GitHub Configuration** (si disponible) :
+- **GitHub App Integration** : Cocher pour connexion automatique
+- **Auto Deploy** : Cocher pour déploiement automatique sur push
+
+3. **Create**
+
+### Étape 1b : Configuration manuelle pour les webhooks
+
+Si vous n'avez pas l'intégration GitHub App, configurez manuellement :
+
+1. Dans l'application Coolify, cliquer **Webhooks**
+2. **Generate Webhook** :
+   - Coolify génère une URL unique
+   - Copier cette URL (elle ressemble à : `https://coolify.example.com/api/v1/webhooks/deploy/xxxxx`)
+
+3. Dans GitHub :
+   - **Repository** → **Settings** → **Webhooks** → **Add webhook**
+   - **Payload URL** : Coller l'URL du webhook Coolify
+   - **Content type** : `application/json`
+   - **Events** : Cocher `Push events`
+   - **Secret** : Si demandé, générer un secret et l'ajouter aussi dans Coolify
+   - **Active** : Cocher
+   - **Add webhook**
 
 ### Étape 2 : Configurer le domaine
 
-1. Dans Coolify, aller à **Application** → **Domains**
-2. **Ajouter un domaine** : `site.tpdevopslabXX.store`
-3. Coolify générera automatiquement un certificat SSL (Let's Encrypt)
+1. Dans l'application Coolify, cliquer **Domains**
+2. **Add Domain** :
+   - **Domain** : `site.tpdevopslab01.store` (remplacer 01 par votre numéro)
+   - **Path** : `/` (root)
+   - **Port** : `5000`
+   - **Auto Generate SSL** : Cocher (pour Let's Encrypt)
 
-### Étape 3 : Configuration du Webhook GitHub
+3. **Add**
 
-#### Option A : Webhook simple (re-pull l'image du registry)
+4. **Sauvegarder** et attendre quelques secondes pour que le certificat soit généré
 
-1. Dans Coolify, aller à **Application** → **Webhooks**
-2. **Créer un webhook** :
-   - **Copier l'URL du webhook**
-   
-3. Dans GitHub :
-   - **Repository** → **Settings** → **Webhooks** → **Add webhook**
-   - **Payload URL** : `https://your-coolify-instance/api/webhooks/deploy`
-   - **Content type** : `application/json`
-   - **Events** : `Push events` et `Pull request events`
-   - **Secret** : `your-webhook-secret` (configuré dans Coolify)
+### Étape 3 : Configurer le DNS auprès de votre fournisseur
 
-#### Option B : GitHub App integration (déploiement direct après Bandit)
+Voir la section [Configuration DNS](#-configuration-dns) ci-dessous.
 
-Si votre instance Coolify supporte l'intégration GitHub App :
+### Étape 4 : Tester le déploiement
 
-1. Dans Coolify, aller à **Settings** → **GitHub App**
-2. **Installer l'application GitHub**
-3. Donner les permissions nécessaires au repo
+1. **Dans Coolify** :
+   - Cliquer sur l'application
+   - Cliquer **Deploy** (ou attendre le webhook)
+   - Voir les logs en temps réel
 
-Cela permettra à Coolify de :
-- Déclencher les déploiements directement
-- Recevoir les webhooks automatiquement
-- Afficher l'état du déploiement sur les PRs
+2. **Vérifier le déploiement** :
+```bash
+# Vérifier que le conteneur est actif
+curl https://site.tpdevopslab01.store/health
+
+# Devrait retourner :
+# {"status": "healthy", "service": "memeforge"}
+```
 
 ---
+
+## 📋 Configuration DNS
 
 ## 🔑 Variables d'environnement GitHub Secrets
 

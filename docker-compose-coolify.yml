@@ -1,0 +1,87 @@
+version: '3.8'
+
+# 🚀 Docker Compose pour installer Coolify localement ou en production
+
+services:
+  # Base de données PostgreSQL (requise pour Coolify)
+  postgres:
+    image: postgres:15-alpine
+    container_name: coolify-postgres
+    environment:
+      POSTGRES_DB: coolify
+      POSTGRES_USER: coolify
+      POSTGRES_PASSWORD: coolify_password_change_this  # Changer en production !
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - coolify-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coolify"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Coolify - Application principale
+  coolify:
+    image: ghcr.io/coollabsio/coolify:latest
+    container_name: coolify
+    ports:
+      - "3000:3000"          # Interface web
+      - "80:80"              # HTTP (pour certifications Let's Encrypt)
+      - "443:443"            # HTTPS
+    environment:
+      COOLIFY_DATABASE_URL: postgresql://coolify:coolify_password_change_this@postgres:5432/coolify
+      COOLIFY_APP_ID: ${COOLIFY_APP_ID:-}
+      COOLIFY_APP_SECRET: ${COOLIFY_APP_SECRET:-}
+      COOLIFY_DOCKER_HOST: /var/run/docker.sock
+      COOLIFY_SENTRY_DSN: ${COOLIFY_SENTRY_DSN:-}
+    volumes:
+      # Accès au Docker daemon du host
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Stockage persistant des données
+      - coolify_data:/data
+      - coolify_logs:/logs
+      - coolify_ssl:/etc/letsencrypt
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - coolify-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Traefik (reverse proxy avancé, pour production seulement)
+  # Décommenter si vous voulez utiliser Traefik au lieu du reverse proxy intégré
+  # traefik:
+  #   image: traefik:v2.10
+  #   container_name: coolify-traefik
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - traefik_data:/traefik
+  #   networks:
+  #     - coolify-network
+
+volumes:
+  postgres_data:
+    driver: local
+  coolify_data:
+    driver: local
+  coolify_logs:
+    driver: local
+  coolify_ssl:
+    driver: local
+  # traefik_data:
+  #   driver: local
+
+networks:
+  coolify-network:
+    driver: bridge
